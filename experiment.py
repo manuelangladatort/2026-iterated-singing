@@ -1,6 +1,8 @@
 # Iterated singing demo (Anglada-Tort et al., 2023)
+from collections import Counter
 from statistics import mean
 from markupsafe import Markup
+import random
 
 # psynet
 from psynet.js_synth import JSSynth, Note, HarmonicTimbre, InstrumentTimbre
@@ -8,8 +10,8 @@ import psynet.experiment
 from psynet.asset import DebugStorage, S3Storage, LocalStorage
 from psynet.consent import NoConsent
 from psynet.modular_page import AudioPrompt, AudioRecordControl, ModularPage
-from psynet.page import InfoPage, SuccessfulEndPage
-from psynet.timeline import Event, ProgressDisplay, ProgressStage, Timeline, CodeBlock
+from psynet.page import InfoPage, SuccessfulEndPage, join
+from psynet.timeline import Event, ProgressDisplay, ProgressStage, Timeline, CodeBlock, conditional
 from psynet.trial.audio import (
     AudioImitationChainTrial,
     AudioImitationChainTrialMaker,
@@ -18,10 +20,23 @@ from psynet.trial.imitation_chain import ImitationChainNode
 from psynet.utils import get_logger
 logger = get_logger()
 
+# Goldsmihts consent
+from .goldsmiths_consent import GoldsmithsConsent, GoldsmithsAudioConsent, GoldsmithsOpenScienceConsent
+
+# other parts study
+from .instructions import welcome, requirements_mic
+from .questionnaire import questionnaire
+from .pre_screens import (
+    mic_test,
+    # recording_example,
+    singing_performance
+)
+
 # sing4me
 from sing4me import singing_extract as sing
 from . sing import melodies
 from . sing.params import singing_2intervals
+
 
 ########################################################################################################################
 # Global parameters
@@ -73,10 +88,9 @@ initial_recruitment_size = 10
 num_iterations_per_chain = 10
 max_num_failed_trials_allowed = 2
 target_num_participants = 30
-num_chains_per_participant = 3  # only active in within
+num_chains_per_participant = 5  # only active in within
 num_chains_per_experiment = 100  # only active in across
 
-repeat_same_chain = True
 save_plot = True
 
 
@@ -94,8 +108,7 @@ if DESIGN == "within":
         "num_chains_per_participant": num_chains_per_participant,
         "recruit_mode": "num_participants",
         "target_num_participants": target_num_participants,
-        "num_chains_per_experiment": None,
-        "repeat_same_chain": repeat_same_chain
+        "num_chains_per_experiment": None
     }
 else:
     num_trials_per_participant = num_chains_per_experiment * num_iterations_per_chain
@@ -111,8 +124,7 @@ else:
         "num_chains_per_participant": None,
         "recruit_mode": "num_trials",
         "target_num_participants": None,
-        "num_chains_per_experiment": num_chains_per_experiment,
-        "repeat_same_chain": repeat_same_chain
+        "num_chains_per_experiment": num_chains_per_experiment
     }
 
 
@@ -360,40 +372,127 @@ class CustomNode(ImitationChainNode):
         )
 
 
+class BalancedNetworksAudioImitationChainTrialMaker(AudioImitationChainTrialMaker):
+    """
+    Restrict the next trial to networks on which this participant has the fewest
+    completed (alive) trials for this trial maker. With K chains, this cycles
+    through all chains once before any chain gets a second trial, and so on.
+    """
+
+    def custom_network_filter(self, candidates, participant):
+        if not candidates:
+            return candidates
+        candidate_ids = {n.id for n in candidates}
+        counts = Counter()
+        for trial in participant.alive_trials:
+            if trial.trial_maker_id != self.id:
+                continue
+            nid = trial.network_id
+            if nid in candidate_ids:
+                counts[nid] += 1
+        min_count = min(counts.get(n.id, 0) for n in candidates)
+        return [n for n in candidates if counts.get(n.id, 0) == min_count]
+
+
+########################################################################################################################
+# Main Singing Blocks
+########################################################################################################################
+
+main_singing = join(
+    InfoPage("We can now start with the main singing task.", time_estimate=2),
+    InfoPage(
+        Markup(
+            f"""
+            <h3>Instructions</h3>
+            <hr>
+            You will listen to a total of {num_trials_per_participant} melodies.
+            <br><br>
+            In each trial, you will hear a melody and will be asked to sing it back.
+            <br><br>
+            Please try to reproduce each pitch in the melody as closely as you can.
+            <hr>
+            """
+        ),
+        time_estimate=3
+    ),
+    BalancedNetworksAudioImitationChainTrialMaker(
+    id_="imitation_chain",
+    trial_class=CustomTrial,
+    node_class=CustomNode,
+    chain_type=DESIGN_PARAMS["chain_type"],
+    expected_trials_per_participant=DESIGN_PARAMS["num_trials_per_participant"],
+    max_nodes_per_chain=num_iterations_per_chain,  # only relevant in within chains
+    chains_per_participant=DESIGN_PARAMS["num_chains_per_participant"],  # set to None if chain_type="across"
+    chains_per_experiment=DESIGN_PARAMS["num_chains_per_experiment"],  # set to None if chain_type="within"
+    trials_per_node=DESIGN_PARAMS["trials_per_node"],
+    balance_across_chains=DESIGN_PARAMS["balance_across_chains"],
+    check_performance_at_end=True,
+    check_performance_every_trial=False,
+    propagate_failure=False,
+    recruit_mode=DESIGN_PARAMS["recruit_mode"],
+    target_n_participants=DESIGN_PARAMS["target_num_participants"],
+    allow_revisiting_networks_in_across_chains=False,
+    ),
+)
+
 
 ########################################################################################################################
 # Timeline
 ########################################################################################################################
 class Exp(psynet.experiment.Experiment):
-    label = "Iterated singing demo"
+    label = "iterated singing musicians"
 
-    asset_storage = DebugStorage()
-    # asset_storage = LocalStorage() # uncomment this to save assets locally (main experiment)
+    asset_storage = LocalStorage()
+
+    show_reward = False
+
+    # config = {
+    #     **get_prolific_settings(),
+    #     "initial_recruitment_size": INITIAL_RECRUITMENT_SIZE,
+    #     "title": "Singing experiment (Chrome browser, ~14 mins)",
+    #     "description": "This is a singing experiment. You will be asked to sing musical melodies.",
+    #     "contact_email_on_error": "m.angladatort@gold.ac.uk",
+    #     "organization_name": "Goldsmiths, University of London",
+    #     "docker_image_base_name": "docker.io/manuelangladatort/iterated-singing",
+    #     "show_reward": False
+    # }
 
     timeline = Timeline(
-        NoConsent(),
-        CodeBlock(lambda participant: participant.var.set("register", "high")),  # set singing register to high for debugg
-        InfoPage(
-            Markup(f"""Please imitate each melody as accurately as possible"""),
-            time_estimate=5,
+        # CONSENT FORMS
+        GoldsmithsConsent(),
+        GoldsmithsAudioConsent(),
+        GoldsmithsOpenScienceConsent(),
+
+        welcome(),
+        requirements_mic(),
+        mic_test(),
+
+        # SINGING PERFOMRANCE TEST TO SCREEN BAD PARTICIPANTS AND SELECT SINGING REGISTER (8 TRIALS)
+        singing_performance(), 
+        conditional( 
+            label="assign_register",
+            condition=lambda experiment, participant: participant.var.predicted_register == "undefined",
+            logic_if_true=CodeBlock(
+                lambda experiment, participant: participant.var.set(
+                    "register", random.choice(["low", "high"]))
+            ),
+            logic_if_false=CodeBlock(lambda experiment, participant: participant.var.set(
+                "register", participant.var.predicted_register)
+                                        ),
+            fix_time_credit=False
         ),
-        AudioImitationChainTrialMaker(
-            id_="imitation_chain",
-            trial_class=CustomTrial,
-            node_class=CustomNode,
-            chain_type=DESIGN_PARAMS["chain_type"],
-            expected_trials_per_participant=DESIGN_PARAMS["num_trials_per_participant"],
-            max_nodes_per_chain=num_iterations_per_chain,  # only relevant in within chains
-            chains_per_participant=DESIGN_PARAMS["num_chains_per_participant"],  # set to None if chain_type="across"
-            chains_per_experiment=DESIGN_PARAMS["num_chains_per_experiment"],  # set to None if chain_type="within"
-            trials_per_node=DESIGN_PARAMS["trials_per_node"],
-            balance_across_chains=DESIGN_PARAMS["balance_across_chains"],
-            check_performance_at_end=True,
-            check_performance_every_trial=False,
-            propagate_failure=False,
-            recruit_mode=DESIGN_PARAMS["recruit_mode"],
-            target_n_participants=DESIGN_PARAMS["target_num_participants"],
-            allow_revisiting_networks_in_across_chains=DESIGN_PARAMS["repeat_same_chain"],
-        ),
+
+        # WHEN PILOTTING, IF YOU WANT TO SKIP THE SINGING PERFOMRANCE TEST, UNCOMMENT THE FOLLOWING LINE AND COMMENT THE CONDITIONAL ABOVE
+        # CodeBlock(lambda participant: participant.var.set("register", "low")),  # set singing register to low for debug
+
+        # MAIN SINGING TASK
+        main_singing,
+
+        # QUESTIONNAIRE
+        questionnaire(),
+
+        # END OF STUDY
         SuccessfulEndPage(),
     )
+
+########################################################################################################################
