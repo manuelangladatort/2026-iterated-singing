@@ -41,7 +41,7 @@ from . sing.params import singing_2intervals
 ########################################################################################################################
 # Global parameters
 ########################################################################################################################
-DESIGN = "within"  # within vs across
+DESIGN = "within"  # within-participants chain design
 SYLLABLE = 'TA'
 NUM_NOTES = 3
 NUM_INT = (NUM_NOTES - 1)
