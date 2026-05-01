@@ -29,3 +29,6 @@ deploy/
 deploy_logs/
 
 source_code.zip
+.Rproj.user
+
+data/

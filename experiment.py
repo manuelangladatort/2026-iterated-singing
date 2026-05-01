@@ -3,6 +3,7 @@ from collections import Counter
 from statistics import mean
 from markupsafe import Markup
 import random
+import json
 
 # psynet
 from psynet.js_synth import JSSynth, Note, HarmonicTimbre, InstrumentTimbre
@@ -36,6 +37,24 @@ from .pre_screens import (
 from sing4me import singing_extract as sing
 from . sing import melodies
 from . sing.params import singing_2intervals
+
+########################################################################################################################
+# Prolific parameters
+########################################################################################################################
+
+def get_prolific_settings():
+    with open("qualification_prolific_en.json", "r") as f:
+        qualification = json.dumps(json.load(f))
+    return {
+        "recruiter": "hotair", # prolific vs hotair,
+        # "id": "singing-nets",
+        "prolific_estimated_completion_minutes": 18,
+        "prolific_recruitment_config": qualification,
+        "base_payment": 3.5,
+        "auto_recruit": False,
+        "currency": "£",
+        "wage_per_hour": 0.01
+    }
 
 
 ########################################################################################################################
@@ -85,17 +104,18 @@ pitch_duration = note_duration_tonejs + note_silence_tonejs
 
 # experiment parameters
 initial_recruitment_size = 10
-num_iterations_per_chain = 10
 max_num_failed_trials_allowed = 2
 target_num_participants = 30
 num_chains_per_participant = 5  # only active in within
 num_chains_per_experiment = 100  # only active in across
+num_iterations_per_chain = 10
+num_of_repeat_trials_allowed = 5 # number of trials that can be repeated by the same participant
 
 save_plot = True
 
 
 if DESIGN == "within":
-    num_trials_per_participant = num_chains_per_participant * num_iterations_per_chain
+    num_trials_per_participant = (num_chains_per_participant * num_iterations_per_chain) + num_of_repeat_trials_allowed
     DESIGN_PARAMS = {
         "num_trials_per_participant": int(num_trials_per_participant),
         "num_trials_practice_test": 3,
@@ -405,7 +425,9 @@ main_singing = join(
             f"""
             <h3>Instructions</h3>
             <hr>
-            You will listen to a total of {num_trials_per_participant} melodies.
+            You will complete {num_chains_per_participant * num_iterations_per_chain}  trials, 
+            with up to {num_of_repeat_trials_allowed} extra repeat trials if needed 
+            (maximum {num_trials_per_participant}).
             <br><br>
             In each trial, you will hear a melody and will be asked to sing it back.
             <br><br>
@@ -421,6 +443,7 @@ main_singing = join(
     node_class=CustomNode,
     chain_type=DESIGN_PARAMS["chain_type"],
     expected_trials_per_participant=DESIGN_PARAMS["num_trials_per_participant"],
+    max_trials_per_participant=DESIGN_PARAMS["num_trials_per_participant"],
     max_nodes_per_chain=num_iterations_per_chain,  # only relevant in within chains
     chains_per_participant=DESIGN_PARAMS["num_chains_per_participant"],  # set to None if chain_type="across"
     chains_per_experiment=DESIGN_PARAMS["num_chains_per_experiment"],  # set to None if chain_type="within"
@@ -446,16 +469,16 @@ class Exp(psynet.experiment.Experiment):
 
     show_reward = False
 
-    # config = {
-    #     **get_prolific_settings(),
-    #     "initial_recruitment_size": INITIAL_RECRUITMENT_SIZE,
-    #     "title": "Singing experiment (Chrome browser, ~14 mins)",
-    #     "description": "This is a singing experiment. You will be asked to sing musical melodies.",
-    #     "contact_email_on_error": "m.angladatort@gold.ac.uk",
-    #     "organization_name": "Goldsmiths, University of London",
-    #     "docker_image_base_name": "docker.io/manuelangladatort/iterated-singing",
-    #     "show_reward": False
-    # }
+    config = {
+        **get_prolific_settings(),
+        "initial_recruitment_size": initial_recruitment_size,
+        "title": "Singing experiment (Chrome browser, ~18 mins)",
+        "description": "This is a singing experiment. You will be asked to sing musical melodies.",
+        "contact_email_on_error": "m.angladatort@gold.ac.uk",
+        "organization_name": "Goldsmiths, University of London",
+        "docker_image_base_name": "docker.io/manuelangladatort/iterated-singing",
+        "show_reward": False
+    }
 
     timeline = Timeline(
         # CONSENT FORMS

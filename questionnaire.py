@@ -37,10 +37,22 @@ def questionnaire():
         Language(),
         MotherTongues(),
         BasicMusic(),
+        main_musical_tradition(),
         GMSI(subscales=["Musical Training"]),
         feedback(),
         debrief()
     )
+
+
+def main_musical_tradition():
+    return ModularPage(
+        "main_musical_tradition",
+        prompt="Which musical tradition best describes your primary musical training and experience?",
+        control=TextControl(one_line=True),
+        save_answer="main_musical_tradition",
+        time_estimate=5,
+    )
+
 
 def feedback():
     return ModularPage(
