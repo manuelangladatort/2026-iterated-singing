@@ -12,7 +12,7 @@ from psynet.demography.general import (
     MotherTongues,
 )
 from psynet.demography.gmsi import GMSI
-from psynet.modular_page import ModularPage, TextControl, SurveyJSControl, PushButtonControl
+from psynet.modular_page import ModularPage, RadioButtonControl, TextControl
 from psynet.page import InfoPage
 from psynet.timeline import join
 
@@ -37,19 +37,39 @@ def questionnaire():
         Language(),
         MotherTongues(),
         BasicMusic(),
-        main_musical_tradition(),
+        musical_tradition_forced_choice(),
+        musical_tradition_open(),
         GMSI(subscales=["Musical Training"]),
         feedback(),
         debrief()
     )
 
 
-def main_musical_tradition():
+def musical_tradition_open():
     return ModularPage(
         "main_musical_tradition",
-        prompt="Which musical tradition best describes your primary musical training and experience?",
+        prompt="Which musical tradition best describes your main musical training and practice?",
         control=TextControl(one_line=True),
         save_answer="main_musical_tradition",
+        time_estimate=5,
+    )
+
+
+def musical_tradition_forced_choice():
+    return ModularPage(
+        "musical_tradition_practice",
+        prompt="Which musical tradition best describes your musical practice?",
+        control=RadioButtonControl(
+            ["western_classical", "traditional_turkish", "other"],
+            [
+                "Western classical music",
+                "Traditional Turkish music",
+                "Other",
+            ],
+            name="musical_tradition_practice",
+            arrange_vertically=False,
+        ),
+        save_answer="musical_tradition_practice",
         time_estimate=5,
     )
 

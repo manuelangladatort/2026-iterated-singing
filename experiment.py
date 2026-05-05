@@ -104,7 +104,6 @@ pitch_duration = note_duration_tonejs + note_silence_tonejs
 
 # experiment parameters
 initial_recruitment_size = 10
-max_num_failed_trials_allowed = 2
 target_num_participants = 30
 num_chains_per_participant = 5  # only active in within
 num_chains_per_experiment = 100  # only active in across
@@ -437,6 +436,17 @@ main_singing = join(
         ),
         time_estimate=3
     ),
+    InfoPage(
+        Markup(
+            """
+            <h3>Reminder</h3>
+            <hr>
+            Please pay attention in each trial because you can only record once and not go back.
+            <hr>
+            """
+        ),
+        time_estimate=2,
+    ),
     BalancedNetworksAudioImitationChainTrialMaker(
     id_="imitation_chain",
     trial_class=CustomTrial,
@@ -455,6 +465,8 @@ main_singing = join(
     recruit_mode=DESIGN_PARAMS["recruit_mode"],
     target_n_participants=DESIGN_PARAMS["target_num_participants"],
     allow_revisiting_networks_in_across_chains=False,
+    # Avoid exiting the trial maker while every chain is awaiting synthesis or growth (media chains).
+    wait_for_networks=True,
     ),
 )
 
