@@ -24,9 +24,11 @@ vertical.lines_pitch = seq(from=min(interval_range_pitch), to=max(interval_range
 
 # import data
 data_melodies <- read_csv("data/clean-data/manu-test-ising1/data-test-ising1_full.csv") # pilot study
+data_melodies <- read_csv("data/clean-data/singing-musicians-June-2026/singing-musicians-June-2026_full.csv") # first batch June 2026
 
 table(data_melodies$degree)
 length(table(data_melodies$network_id))
+length(table(data_melodies$participant_id))
 
 
 ################################################################################
@@ -81,5 +83,5 @@ marginals_melodies_intervals = make_marginals_kde(data_melodies_long_intervals, 
 marginals_melodies_intervals
 
 # sabe
-ggsave("results/marginals_intervals.png", width = 14, height = 7, units = "cm")
+# ggsave("results/marginals_intervals.png", width = 14, height = 7, units = "cm")
 

@@ -79,7 +79,7 @@ generate_column_names_freenotes <- function(column, name) {
 prepare_trial_data <- function(data_nodes, data_trials){
 
   data_nodes <- data_nodes %>%
-    select(-target_pitches, -trial_type)
+    select(-target_pitches, -target_intervals, -trial_type)
 
   data_nodes$definition[is.na(data_nodes$definition)] <- "{}"
   data_nodes_unpacked = unpack_json_column(data_nodes, data_nodes$definition)
