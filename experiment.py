@@ -104,19 +104,23 @@ pitch_duration = note_duration_tonejs + note_silence_tonejs
 
 # experiment parameters
 initial_recruitment_size = 10
-target_num_participants = 30
+target_num_participants = 100
 num_chains_per_participant = 5  # only active in within
-num_chains_per_experiment = 100  # only active in across
+num_chains_per_experiment = 300  # only active in across
 num_iterations_per_chain = 10
-num_of_repeat_trials_allowed = 5 # number of trials that can be repeated by the same participant
+max_attempts_per_node = 3  # failed singing attempts on the same melody before abandoning the chain
+max_extra_trials = 10  # total retake budget beyond required trials (hard cap on session length)
 
 save_plot = True
 
+num_required_trials = num_chains_per_participant * num_iterations_per_chain
+max_trials_per_participant = num_required_trials + max_extra_trials
+
 
 if DESIGN == "within":
-    num_trials_per_participant = (num_chains_per_participant * num_iterations_per_chain) + num_of_repeat_trials_allowed
     DESIGN_PARAMS = {
-        "num_trials_per_participant": int(num_trials_per_participant),
+        "num_required_trials": int(num_required_trials),
+        "max_trials_per_participant": int(max_trials_per_participant),
         "num_trials_practice_test": 3,
         "num_trials_practice_feedback": 2,
         "num_iterations_per_chain": num_iterations_per_chain,
@@ -130,9 +134,9 @@ if DESIGN == "within":
         "num_chains_per_experiment": None
     }
 else:
-    num_trials_per_participant = num_chains_per_experiment * num_iterations_per_chain
     DESIGN_PARAMS = {
-        "num_trials_per_participant": int(num_trials_per_participant),
+        "num_required_trials": int(num_chains_per_experiment * num_iterations_per_chain),
+        "max_trials_per_participant": int(num_chains_per_experiment * num_iterations_per_chain),
         "num_trials_practice_test": 3,
         "num_trials_practice_feedback": 3,
         "num_iterations_per_chain": num_iterations_per_chain,
@@ -289,6 +293,21 @@ class CustomTrialAnalysis(AudioImitationChainTrial):
 class CustomTrial(CustomTrialAnalysis):
     time_estimate = TIME_ESTIMATE_TRIAL
 
+    def fail(self, reason=None):
+        super().fail(reason=reason)
+        if reason != "analysis":
+            return
+        n_analysis_failures = sum(1 for t in self.node.all_trials if t.failed)
+        if n_analysis_failures >= max_attempts_per_node:
+            logger.info(
+                "Failing node %i and network %i after %i analysis failures.",
+                self.node.id,
+                self.network.id,
+                n_analysis_failures,
+            )
+            self.node.fail(reason=reason)
+            self.network.fail(reason="analysis_failure_max_attempts")
+
     def show_trial(self, experiment, participant):
         logger.info("********** Register of participant: {0} **********".format(participant.var.register))
         logger.info("********** Trial123 definition: {} ********** ".format(self.definition))
@@ -306,8 +325,8 @@ class CustomTrial(CustomTrialAnalysis):
         )
 
         current_trial = self.position + 1
-        total_num_trials = DESIGN_PARAMS["num_trials_per_participant"]
-        show_current_trial = f'<br><br>Trial number {current_trial} out of {total_num_trials} possible maximum trials.'
+        total_num_trials = DESIGN_PARAMS["max_trials_per_participant"]
+        show_current_trial = f'<br><br>Trial number {current_trial} out of {total_num_trials} maximum trials.'
 
         pages = create_singing_trial(
             show_current_trial,
@@ -424,9 +443,10 @@ main_singing = join(
             f"""
             <h3>Instructions</h3>
             <hr>
-            You will complete {num_chains_per_participant * num_iterations_per_chain}  trials, 
-            with up to {num_of_repeat_trials_allowed} extra repeat trials if needed 
-            (maximum {num_trials_per_participant}).
+            You will complete {num_required_trials} trials, 
+            with up to {max_extra_trials} extra repeat trials if needed 
+            (maximum {max_trials_per_participant}).
+            Each melody can be repeated up to {max_attempts_per_node} times.
             <br><br>
             In each trial, you will hear a melody and will be asked to sing it back.
             <br><br>
@@ -452,8 +472,8 @@ main_singing = join(
     trial_class=CustomTrial,
     node_class=CustomNode,
     chain_type=DESIGN_PARAMS["chain_type"],
-    expected_trials_per_participant=DESIGN_PARAMS["num_trials_per_participant"],
-    max_trials_per_participant=DESIGN_PARAMS["num_trials_per_participant"],
+    expected_trials_per_participant=DESIGN_PARAMS["num_required_trials"],
+    max_trials_per_participant=DESIGN_PARAMS["max_trials_per_participant"],
     max_nodes_per_chain=num_iterations_per_chain,  # only relevant in within chains
     chains_per_participant=DESIGN_PARAMS["num_chains_per_participant"],  # set to None if chain_type="across"
     chains_per_experiment=DESIGN_PARAMS["num_chains_per_experiment"],  # set to None if chain_type="within"
